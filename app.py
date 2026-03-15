@@ -9,14 +9,21 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def load_data(file_name):
-    # This creates a solid path to the file regardless of where the server runs it
-    file_path = os.path.join(BASE_DIR, file_name)
-    try:
-        # We use 'on_bad_lines' to prevent crashes if there's a formatting error in the CSV
-        return pd.read_csv(file_path, on_bad_lines='skip')
-    except Exception as e:
-        print(f"CRITICAL ERROR: Could not find or read {file_path}. Error: {e}")
-        return pd.DataFrame()
+    # This checks for both 'courses.csv' and 'courses.csv.csv' just in case
+    possible_names = [file_name, f"{file_name}.csv", file_name.lower()]
+    
+    for name in possible_names:
+        file_path = os.path.join(BASE_DIR, name)
+        if os.path.exists(file_path):
+            try:
+                print(f"SUCCESS: Found file at {file_path}")
+                return pd.read_csv(file_path, on_bad_lines='skip')
+            except Exception as e:
+                print(f"Error reading {name}: {e}")
+                continue
+                
+    print(f"CRITICAL: Could not find {file_name} in {BASE_DIR}")
+    return pd.DataFrame()
 
 # --- ROUTES ---
 
