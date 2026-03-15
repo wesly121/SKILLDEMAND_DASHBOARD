@@ -4,57 +4,40 @@ import os
 
 app = Flask(__name__)
 
-# --- FILE PATH FIX FOR DEPLOYMENT ---
-# This finds the exact folder on the Render server where app.py is located
+# This helps the server find your CSV files correctly
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def load_data(file_name):
-    # This checks for both 'courses.csv' and 'courses.csv.csv' just in case
-    possible_names = [file_name, f"{file_name}.csv", file_name.lower()]
-    
-    for name in possible_names:
-        file_path = os.path.join(BASE_DIR, name)
-        if os.path.exists(file_path):
-            try:
-                print(f"SUCCESS: Found file at {file_path}")
-                return pd.read_csv(file_path, on_bad_lines='skip')
-            except Exception as e:
-                print(f"Error reading {name}: {e}")
-                continue
-                
-    print(f"CRITICAL: Could not find {file_name} in {BASE_DIR}")
-    return pd.DataFrame()
-
-# --- ROUTES ---
+    file_path = os.path.join(BASE_DIR, file_name)
+    try:
+        # We skip bad lines to prevent crashes if a CSV row is messy
+        return pd.read_csv(file_path, on_bad_lines='skip')
+    except Exception as e:
+        print(f"Error loading {file_name}: {e}")
+        return pd.DataFrame()
 
 @app.route('/')
 def dashboard():
     courses_df = load_data('courses.csv')
     jobs_df = load_data('jobs.csv')
     
-    # Check if data is empty to prevent crashes
-    preview_courses = courses_df.head(6).to_dict(orient='records') if not courses_df.empty else []
-    preview_jobs = jobs_df.head(5).to_dict(orient='records') if not jobs_df.empty else []
+    # Use .to_dict() safely only if the dataframe isn't empty
+    courses = courses_df.head(6).to_dict(orient='records') if not courses_df.empty else []
+    jobs = jobs_df.head(5).to_dict(orient='records') if not jobs_df.empty else []
 
     skills_context = {
         "chart_labels": ["Python", "SQL", "Cloud", "AI", "Project Management"],
         "chart_values": [95, 85, 80, 75, 65]
     }
     
-    return render_template('index.html', 
-                           courses=preview_courses, 
-                           jobs=preview_jobs, 
-                           skills=skills_context)
+    return render_template('index.html', courses=courses, jobs=jobs, skills=skills_context)
 
 @app.route('/course/<int:course_id>')
 def course_detail(course_id):
     df = load_data('courses.csv')
-    if df.empty:
-        abort(500, description="Database missing")
-        
+    if df.empty: abort(404)
     course = df[df['id'] == course_id]
-    if course.empty:
-        abort(404)
+    if course.empty: abort(404)
     return render_template('course_details.html', course=course.iloc[0].to_dict())
 
 @app.route('/catalog')
@@ -69,10 +52,6 @@ def all_jobs():
     jobs = df.to_dict(orient='records') if not df.empty else []
     return render_template('all_jobs.html', jobs=jobs)
 
-# --- PRODUCTION SERVER CONFIG ---
-
 if __name__ == '__main__':
-    # This tells the app to use the port provided by Render
     port = int(os.environ.get("PORT", 5000))
-    # '0.0.0.0' allows the app to be seen by the internet
     app.run(host='0.0.0.0', port=port)
